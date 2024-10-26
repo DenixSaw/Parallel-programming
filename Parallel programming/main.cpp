@@ -150,5 +150,5 @@ int main()
 	delete[] data;
 	delete[] threads;
 
-	return 0;
+	return EXIT_SUCCESS;
 }
