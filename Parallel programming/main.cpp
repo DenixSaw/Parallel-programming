@@ -1,9 +1,10 @@
 ﻿#include <iostream>
-#include <cmath>
 #define HAVE_STRUCT_TIMESPEC
 #include <chrono>
 #include <pthread.h>
 #include <locale>
+#include <limits>
+#include "thread_data.h"
 
 constexpr int WEIGHTS[] = { 1, 3, 3, 1 }; // Весовые коэфициенты.
 constexpr auto Cn = 8; // Сумма весов.
@@ -13,13 +14,6 @@ using namespace std;
 using namespace std::chrono;
 
 auto f = [](double x) -> double { return pow(x, 3) + 3 * pow(x, 2) - 2 * x + 1; };
-
-typedef struct thread_data {
-	double left; // Левая граница.
-	double step; // Шаг.
-	double result; // Результат, полученный потоком.
-	int subintervals; // Количество интервалов, обрабатываемых потоком
-} thread_data;
 
 
 static void* integrate(void* thr_data) {
@@ -47,72 +41,110 @@ int main()
 {
 	setlocale(0, "RUS");
 
-	int count_threads = 8; // Кол-во потоков.
-	double a = -3; // Левая граница интегрирования.
-	double b = 5; // Правая граница интегрирования.
-	int cnt_step = 30000000; // Кол-во шагов. Чем больше, тем точнее результат.
+	int cnt_threads = 0; // Кол-во потоков.
+	double a = 0; // Левая граница интегрирования.
+	double b = 0; // Правая граница интегрирования.
+	int cnt_steps = 0; // Кол-во шагов. Чем больше, тем точнее результат.
 
-	if (count_threads > 8 || count_threads < 1) {
-		cout << "Количество потоков должно быть числом от 1 до 8 включительно!" << endl;
-		return -1;
+	while (true) {
+		cout << "Введите кол-во потоков (от 1 до 8 включительно): ";
+		cin >> cnt_threads;
+
+		if (cnt_threads < 1 || cnt_threads > 8) {
+			cout << "Количество потоков должно быть числом от 1 до 8 включительно!" << endl;
+		}
+		else
+			break;
+
+		cin.clear();
+		cin.ignore(numeric_limits<streamsize>::max(), '\n');
+		cout << endl;
 	}
-	else if (b < a) {
-		cout << "Левая граница интегрирования должна быть больше правой! Проверьте переменные a и b!" << endl;
-		return -1;
+
+	//system("cls");
+
+	while (true) {
+		cout << "Введите левую границу интегрирования: ";
+		cin >> a;
+		cout << "Введите правую границу интегрирования: ";
+		cin >> b;
+
+		if (a > b) {
+			cout << "Левая граница должна быть больше правой!" << endl;
+		}
+		else
+			break;
+
+		cin.clear();
+		cin.ignore(numeric_limits<streamsize>::max(), '\n');
+		cout << endl;
 	}
-	else if (cnt_step % 3 != 0) {
-		cout << "Количество шагов должно быть целое число, кратное 3!" << endl;
-		return -1;
+
+	//system("cls");
+
+	while (true) {
+		cout << "Введите кол-во шагов, кратное 3: ";
+		cin >> cnt_steps;
+
+		if (cnt_steps % 3 != 0) {
+			cout << "Количество шагов должно быть целым числом, кратным 3!" << endl;
+		}
+		else
+			break;
+
+		cin.clear();
+		cin.ignore(numeric_limits<streamsize>::max(), '\n');
+		cout << endl;
 	}
+
+	//system("cls");
 
 	double cnt_subinterval = 0; // Общее количество подынтервалов.
-	double step = abs(b - a) / (double)cnt_step; // Шаг интегрирования.
-	cnt_subinterval = (double)cnt_step / 3;
+	double step = abs(b - a) / (double)cnt_steps; // Шаг интегрирования.
+	cnt_subinterval = (double)cnt_steps / 3;
 
-	double subinterval_for_thread = cnt_subinterval / count_threads; // Количество подынтервалов в потоке.
+	double subinterval_for_thread = cnt_subinterval / cnt_threads; // Количество подынтервалов в потоке.
 	int last_subinterval = 0; // Количество подынтервалов для последнего потока.
 
 	if (floor(subinterval_for_thread) != subinterval_for_thread)
 	{
 		subinterval_for_thread = floor(subinterval_for_thread); // Целое, округленное количество подынтервалов для одного потока.
-		last_subinterval = cnt_subinterval - (count_threads - 1) * subinterval_for_thread; // Количество подынтервалов для последнего потока. после округления.
+		last_subinterval = cnt_subinterval - (cnt_threads - 1) * subinterval_for_thread; // Количество подынтервалов для последнего потока. после округления.
 	}
 	else
 		last_subinterval = subinterval_for_thread;
 
-	thread_data* data = new thread_data[count_threads];
-	pthread_t* threads = new pthread_t[count_threads];
+	thread_data* data = new thread_data[cnt_threads];
+	pthread_t* threads = new pthread_t[cnt_threads];
 
 	double left = a; // Левая граница.
-	double right = 0.0; // Правая граница.
 	double total_result = 0.0; // Переменная, в которую будет записан общий результат выполнения потоков.
 
-	auto start = high_resolution_clock::now(); // Фиксируем время перед началом работы потоков.
-	for (int i = 0; i < count_threads; i++) {
+	auto time_start = high_resolution_clock::now(); // Фиксируем время перед началом работы потоков.
+	for (int i = 0; i < cnt_threads; i++) {
 
-		if (count_threads - i == 1)
+		if (cnt_threads - i == 1)
 			subinterval_for_thread = last_subinterval;
-
-		right = left + subinterval_for_thread * N * step; // Пересчитываем правую границу.
 
 		data[i] = { left, step, 0, int(subinterval_for_thread) }; // Заполняем структуру данных для потока.
 		pthread_create(&threads[i], nullptr, integrate, (void*)&data[i]); // Создаем поток и подаем в него данные.
 
-		left = right; // Сдвигаем левую границу. Права граница текущего подынтервала является левой границей следующего.
+		left = left + subinterval_for_thread * N * step; // Сдвигаем левую границу.
 	}
 
 	// В цикле отлавливаем потоки после их выполнения и достаем из них результат. Прибавляем результат в общий результат.
-	for (int i = 0; i < count_threads; ++i) {
+	for (int i = 0; i < cnt_threads; ++i) {
 		pthread_join(threads[i], nullptr);
 		total_result += data[i].result;
 	}
 
 	// Фиксируем и выводим время, за которое потоки выполнили работу.
-	auto end = high_resolution_clock::now();
-	duration<double> elapsed = end - start;
+	auto time_end = high_resolution_clock::now();
+	duration<double> elapsed = time_end - time_start;
 
-	cout << total_result << endl;
-	cout << "Время выполнения: " << elapsed.count() << " секунд" << endl;
+	cout << endl;
+	cout << "Результат: " << total_result << endl;
+	cout << "Время вычисления: " << elapsed.count() << " секунд" << endl;
 
 	// Очищаем выделенную память.
 	delete[] data;

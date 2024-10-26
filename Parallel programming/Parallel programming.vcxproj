@@ -140,6 +140,7 @@
     <ClInclude Include="..\..\..\..\..\..\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\VS\include\pthread.h" />
     <ClInclude Include="..\..\..\..\..\..\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\VS\include\sched.h" />
     <ClInclude Include="..\..\..\..\..\..\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\VS\include\semaphore.h" />
+    <ClInclude Include="thread_data.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
