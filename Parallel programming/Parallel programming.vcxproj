@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{59e96208-4cc2-4e1b-b075-44c69bceeae3}</ProjectGuid>
+    <ProjectGuid>{F85D5BE0-5096-4C67-ADD9-709E511F938D}</ProjectGuid>
     <RootNamespace>testProject</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>Parallel programming</ProjectName>
