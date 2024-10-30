@@ -2,10 +2,8 @@
 #ifndef thread_data
 
 typedef struct thread_data {
-	double left; // Левая граница.
-	double step; // Шаг.
-	double result; // Результат, полученный потоком.
-	int subintervals; // Количество интервалов, обрабатываемых потоком
+	int a; // Первое число.
+	int b; // Второе число.
 } thread_data;
 
 #endif
