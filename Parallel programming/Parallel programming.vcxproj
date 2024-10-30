@@ -140,6 +140,9 @@
     <ClInclude Include="..\..\..\..\..\..\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\VS\include\semaphore.h" />
     <ClInclude Include="thread_data.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="nums_for_gcd.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
