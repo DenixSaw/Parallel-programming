@@ -5,10 +5,19 @@
 #include <sstream>
 #include <fstream>
 #include <string>
+#include <chrono>
+#include <limits>
 
+using namespace std::chrono;
+
+
+const int MAX_RES = 5;
+mutex mtx;
 
 
 int calc_gcd(int a, int b) {
+	if (a == 0 || b == 0)
+		return 1;
 	while (a != b) {
 		if (a > b) {
 			a -= b;
@@ -20,8 +29,55 @@ int calc_gcd(int a, int b) {
 	return b;
 }
 
+void record_result(thread_data* data) {
+	int a = data->queue[0].first;
+	int b = data->queue[0].second;
+	data->queue.erase(data->queue.begin()); // Это очень плохо...
+	int current_result = calc_gcd(a, b);
+	data->results.push_back(current_result);
+}
+
+void write_results(thread_data* data) {
+	bool is_locked = false;
+	while (true) {
+		is_locked = mtx.try_lock();
+		if (is_locked) {
+			fstream file;
+			file.open("results.txt", ios::in | ios::out | ios::app);
+
+			if (!file)
+				file.open("results.txt", ios::out);
+			while (data->results.size() != 0) {
+				file << data->results[0] << endl;
+				data->results.erase(data->results.begin());
+			}
+
+			file.close();
+			mtx.unlock();
+			cout << "Результаты записаны потоком №" << data->index << endl;
+			break;
+		}
+	}
+}
+
 void worker(thread_data* data) {
-	
+	while (data->queue.size() != 0 || data->results.size() != 0 || !data->is_file_ended) {
+		if (data->queue.size() == 0 && data->results.size() == 0 && !data->is_file_ended)
+			continue;
+		else if (data->queue.size() == 0 && (0 < data->results.size() < MAX_RES) && !data->is_file_ended)
+			continue;
+		else if (data->queue.size() == 0 && data->results.size() == MAX_RES && !data->is_file_ended)
+			write_results(data);
+		else if (data->queue.size() != 0) {
+			if (data->results.size() < MAX_RES) {
+				record_result(data);
+			}
+			else
+				write_results(data);
+		}
+		else if (data->queue.size() == 0 && (0 < data->results.size() <= MAX_RES) && data->is_file_ended)
+			write_results(data);
+	}
 }
 
 
@@ -37,23 +93,47 @@ int main()
 	thread* threads = new thread[N];
 	thread_data* data = new thread_data[N];
 
+	ofstream file("results.txt", std::ios::out | std::ios::trunc);
+	if (!file)
+		file.open("results.txt", ios::out);
+	file.close();
+
 
 	for (int i = 0; i < N; i++) {
+		data[i].index = i;
 		threads[i] = thread(worker, &data[i]);
 	}
 
+	auto time_start = high_resolution_clock::now();
+
 	if (source_file.is_open()) {
+		int cnt = 0;
 		while (getline(source_file, line)) {
-			istringstream temp(line); // TODO: поменять название переменной temp.
+			istringstream temp(line);
 			temp >> a >> b;
-			
+			if (cnt < N) {
+				data[cnt].queue.push_back(make_pair(a, b));
+				cnt++;
+			}
+			if (cnt >= N)
+				cnt = 0;
 		}
 	}
 	source_file.close();
 
 	for (int i = 0; i < N; i++) {
+		data[i].is_file_ended = true;
+	}
+
+	for (int i = 0; i < N; i++) {
 		threads[i].join();
 	}
+
+	auto time_end = high_resolution_clock::now();
+	duration<double> elapsed = time_end - time_start;
+
+	cout << endl;
+	cout << "Время вычисления: " << elapsed.count() << " секунд" << endl;
 
 	delete[] threads;
 	delete[] data;
