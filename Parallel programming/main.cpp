@@ -7,82 +7,78 @@
 #include <string>
 #include <chrono>
 #include <limits>
+#include <mutex>
+#include <condition_variable>
 
 using namespace std::chrono;
 
-
 const int MAX_RES = 5;
 mutex mtx;
-
+condition_variable cv;
 
 int calc_gcd(int a, int b) {
 	if (a == 0 || b == 0)
 		return 1;
-	while (a != b) {
-		if (a > b) {
-			a -= b;
-		}
-		else {
-			b -= a;
-		}
-	}
-	return b;
+
+	while (a && b)
+		if (a > b) a %= b;
+		else b %= a;
+	return a + b;
 }
 
 void record_result(thread_data* data) {
 	int a = data->queue[0].first;
 	int b = data->queue[0].second;
-	data->queue.erase(data->queue.begin()); // Это очень плохо...
+	data->queue.erase(data->queue.begin()); // Удаляем обработанную пару
 	int current_result = calc_gcd(a, b);
 	data->results.push_back(current_result);
 }
 
 void write_results(thread_data* data) {
-	bool is_locked = false;
-	while (true) {
-		is_locked = mtx.try_lock();
-		if (is_locked) {
-			fstream file;
-			file.open("results.txt", ios::in | ios::out | ios::app);
-
-			if (!file)
-				file.open("results.txt", ios::out);
-			while (data->results.size() != 0) {
-				file << data->results[0] << endl;
-				data->results.erase(data->results.begin());
-			}
-
-			file.close();
-			mtx.unlock();
-			cout << "Результаты записаны потоком №" << data->index << endl;
-			break;
-		}
+	unique_lock<mutex> lock(mtx);
+	fstream file("results.txt", std::ios::in | std::ios::out | std::ios::app);
+	if (!file) {
+		file.open("results.txt", std::ios::out);
 	}
+
+	while (!data->results.empty()) {
+		file << data->results[0] << endl;
+		data->results.erase(data->results.begin());
+	}
+
+	lock.unlock();
+	cv.notify_all(); // Уведомляем другие потоки
+	//cout << "Результаты записаны потоком №" << data->index << endl;
 }
 
 void worker(thread_data* data) {
-	while (data->queue.size() != 0 || data->results.size() != 0 || !data->is_file_ended) {
-		if (data->queue.size() == 0 && data->results.size() == 0 && !data->is_file_ended)
-			continue;
-		else if (data->queue.size() == 0 && (0 < data->results.size() < MAX_RES) && !data->is_file_ended)
-			continue;
-		else if (data->queue.size() == 0 && data->results.size() == MAX_RES && !data->is_file_ended)
-			write_results(data);
-		else if (data->queue.size() != 0) {
-			if (data->results.size() < MAX_RES) {
-				record_result(data);
-			}
-			else
-				write_results(data);
+	while (true) {
+		if (data->queue.empty() && data->is_file_ended) {
+			// Если очередь пуста и файл закончился, выходим из цикла
+			break;
 		}
-		else if (data->queue.size() == 0 && (0 < data->results.size() <= MAX_RES) && data->is_file_ended)
-			write_results(data);
+
+		if (!data->queue.empty()) {
+			record_result(data); // Обрабатываем пару
+
+			if (!data->results.empty() && data->results.size() == MAX_RES) {
+				write_results(data); // Записываем результаты в файл
+			}
+		}
+		//else {
+		//	// Если очередь пуста, ждем, пока появятся новые данные. Можем здесь делать задержку
+		//	//std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		//	continue;
+		//}
+	}
+
+	// Записываем оставшиеся результаты, если есть
+	if (!data->results.empty()) {
+		write_results(data);
 	}
 }
 
-
-int main()
-{
+int main() {
 	setlocale(0, "RUS");
 
 	string line;
@@ -94,13 +90,17 @@ int main()
 	thread_data* data = new thread_data[N];
 
 	ofstream file("results.txt", std::ios::out | std::ios::trunc);
-	if (!file)
-		file.open("results.txt", ios::out);
+	if (!file) {
+		file.open("results.txt", std::ios::out);
+	}
 	file.close();
 
-
+	// Инициализация данных для потоков
 	for (int i = 0; i < N; i++) {
 		data[i].index = i;
+	}
+	// Запуск потоков
+	for (int i = 0; i < N; i++) {
 		threads[i] = thread(worker, &data[i]);
 	}
 
@@ -111,20 +111,18 @@ int main()
 		while (getline(source_file, line)) {
 			istringstream temp(line);
 			temp >> a >> b;
-			if (cnt < N) {
-				data[cnt].queue.push_back(make_pair(a, b));
-				cnt++;
-			}
-			if (cnt >= N)
-				cnt = 0;
+			data[cnt].queue.push_back(make_pair(a, b));
+			cnt = (cnt + 1) % N; // Циклическое распределение пар
 		}
 	}
 	source_file.close();
 
+	// Установка флага окончания обработки файла
 	for (int i = 0; i < N; i++) {
 		data[i].is_file_ended = true;
 	}
 
+	// Ожидание завершения потоков
 	for (int i = 0; i < N; i++) {
 		threads[i].join();
 	}
