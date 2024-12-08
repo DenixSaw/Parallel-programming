@@ -84,7 +84,7 @@ int main() {
 	string line;
 	ifstream source_file("nums_for_gcd.txt");
 	int a, b;
-	int N = 8;
+	int N = 4;
 
 	thread* threads = new thread[N];
 	thread_data* data = new thread_data[N];
