@@ -1,20 +1,11 @@
 ﻿#include <iostream>
-#include <thread>
-#include <locale>
-#include "thread_data.h"
-#include <sstream>
 #include <fstream>
-#include <string>
-#include <chrono>
-#include <limits>
-#include <mutex>
-
+#include <sstream>
+#include <vector>
+#include <utility>
+#include <omp.h>
+#include <sys/stat.h>
 using namespace std;
-using namespace std::chrono;
-
-const int MAX_RES = 5;
-mutex mtx;
-condition_variable cv;
 
 int calc_gcd(int a, int b) {
 	if (a == 0 || b == 0)
@@ -26,56 +17,10 @@ int calc_gcd(int a, int b) {
 	return a + b;
 }
 
-void record_result(thread_data* data) {
-	unique_lock<mutex> lock(data->qmtx); // Захватываем мьютекс, чтобы работать с очередью
-	int a = data->queue[0].first;
-	int b = data->queue[0].second;
-	data->queue.erase(data->queue.begin()); // Удаляем обработанную пару
-	lock.unlock(); // Освобождаем мьютекс.
-	int current_result = calc_gcd(a, b);
-	data->results.push_back(current_result);
-}
-
-void write_results(thread_data* data) {
-	unique_lock<mutex> lock(mtx);
-	fstream file("results.txt", std::ios::in | std::ios::out | std::ios::app);
-	if (!file) {
-		file.open("results.txt", std::ios::out);
-	}
-
-	while (!data->results.empty()) {
-		file << data->results[0] << endl;
-		data->results.erase(data->results.begin());
-	}
-	file.close();
-	//lock.unlock();
-	//cout << "Результаты записаны потоком №" << data->index << endl;
-}
-
-void worker(thread_data* data) {
-	while (true) {
-		if (data->queue.empty() && data->is_file_ended) {
-			// Если очередь пуста и файл закончился, выходим из цикла
-			break;
-		}
-
-		if (!data->queue.empty()) {
-			record_result(data); // Обрабатываем пару
-
-			if (!data->results.empty() && data->results.size() == MAX_RES) {
-				write_results(data); // Записываем результаты в файл
-			}
-		}
-		//else {
-		//	// Если очередь пуста, ждем, пока появятся новые данные. Можем здесь делать задержку
-		//	//std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		//	continue;
-		//}
-	}
-
-	// Записываем оставшиеся результаты, если есть
-	if (!data->results.empty()) {
-		write_results(data);
+void write_results(const vector<int>& results) {
+	ofstream file("results.txt", ios::app);
+	for (const int& result : results) {
+		file << result << endl;
 	}
 }
 
@@ -84,60 +29,51 @@ int main() {
 
 	string line;
 	ifstream source_file("nums_for_gcd.txt");
-	int a, b;
-	int N = 6;
+	double start_time = omp_get_wtime();
+#pragma opm parallel
+	vector<pair<int, int>> pairs;
 
-	thread* threads = new thread[N];
-	thread_data* data = new thread_data[N];
-
-	ofstream file("results.txt", std::ios::out | std::ios::trunc);
-	if (!file) {
-		file.open("results.txt", std::ios::out);
+#pragma omp master
+	{
+		// Чтение пар чисел из файла
+		if (source_file.is_open()) {
+			while (getline(source_file, line)) {
+				istringstream temp(line);
+				int a, b;
+				temp >> a >> b;
+#pragma omp critical
+				{
+					pairs.push_back(make_pair(a, b));
+				}
+			}
+		}
+		source_file.close();
 	}
-	file.close();
+	int num_pairs = pairs.size();
 
-	// Инициализация данных для потоков
-	for (int i = 0; i < N; i++) {
-		data[i].index = i;
-	}
-	// Запуск потоков
-	for (int i = 0; i < N; i++) {
-		threads[i] = thread(worker, &data[i]);
-	}
-
-	auto time_start = high_resolution_clock::now();
-
-	if (source_file.is_open()) {
-		int cnt = 0;
-		while (getline(source_file, line)) {
-			istringstream temp(line);
-			temp >> a >> b;
-			unique_lock<mutex> lock(data[cnt].qmtx); // Захватываем мьютекс, чтобы записать пару в очередь
-			data[cnt].queue.push_back(make_pair(a, b));
-			lock.unlock(); // Освобождаем мьютекс
-			cnt = (cnt + 1) % N; // Циклическое распределение пар
+	// Параллельное вычисление GCD и запись результатов в файл
+#pragma omp parallel
+	{
+		vector<int> thread_results; // Результаты для каждого потока
+#pragma omp for
+		for (int i = 0; i < num_pairs; i++) {
+			int a = pairs[i].first;
+			int b = pairs[i].second;
+			int current_result = calc_gcd(a, b);
+#pragma omp critical
+			{
+				thread_results.push_back(current_result); // Сохраняем результаты в локальный вектор
+			}
+		}
+		// Записываем результаты в файл из каждого потока
+#pragma omp critical
+		{
+			write_results(thread_results);
 		}
 	}
-	source_file.close();
-
-	// Установка флага окончания обработки файла
-	for (int i = 0; i < N; i++) {
-		data[i].is_file_ended = true;
-	}
-
-	// Ожидание завершения потоков
-	for (int i = 0; i < N; i++) {
-		threads[i].join();
-	}
-
-	auto time_end = high_resolution_clock::now();
-	duration<double> elapsed = time_end - time_start;
-
-	cout << endl;
-	cout << "Время вычисления: " << elapsed.count() << " секунд" << endl;
-
-	delete[] threads;
-	delete[] data;
+	double end_time = omp_get_wtime();
+	cout << "Результаты записаны." << endl;
+	cout << "Время выполнения:" << end_time - start_time << endl;
 
 	return EXIT_SUCCESS;
 }
