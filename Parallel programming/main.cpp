@@ -27,6 +27,9 @@ void write_results(const vector<int>& results) {
 int main() {
 	setlocale(0, "RUS");
 
+	int num_threads = 8;
+	omp_set_num_threads(num_threads);
+
 	string line;
 	ifstream source_file("nums_for_gcd.txt");
 	double start_time = omp_get_wtime();
