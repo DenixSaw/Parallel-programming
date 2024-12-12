@@ -11,8 +11,9 @@ using namespace std;
 typedef struct thread_data {
 	vector<int> results; // Буфер результатов.
 	vector<pair<int, int>> queue; // Очередь пар чисел.
-	atomic<bool> is_file_ended = false; // Флаг - закончился ли файл.
-	int index;
+	bool is_file_ended = false; // Флаг - закончился ли файл.
+	int index; // Индекс потока.
+	mutex qmtx; // Мьютекс доступа к очереди с парами.
 } thread_data;
 
 #endif

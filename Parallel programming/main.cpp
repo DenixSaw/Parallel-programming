@@ -8,8 +8,8 @@
 #include <chrono>
 #include <limits>
 #include <mutex>
-#include <condition_variable>
 
+using namespace std;
 using namespace std::chrono;
 
 const int MAX_RES = 5;
@@ -27,9 +27,11 @@ int calc_gcd(int a, int b) {
 }
 
 void record_result(thread_data* data) {
+	unique_lock<mutex> lock(data->qmtx); // Захватываем мьютекс, чтобы работать с очередью
 	int a = data->queue[0].first;
 	int b = data->queue[0].second;
 	data->queue.erase(data->queue.begin()); // Удаляем обработанную пару
+	lock.unlock(); // Освобождаем мьютекс.
 	int current_result = calc_gcd(a, b);
 	data->results.push_back(current_result);
 }
@@ -45,9 +47,8 @@ void write_results(thread_data* data) {
 		file << data->results[0] << endl;
 		data->results.erase(data->results.begin());
 	}
-
-	lock.unlock();
-	cv.notify_all(); // Уведомляем другие потоки
+	file.close();
+	//lock.unlock();
 	//cout << "Результаты записаны потоком №" << data->index << endl;
 }
 
@@ -84,7 +85,7 @@ int main() {
 	string line;
 	ifstream source_file("nums_for_gcd.txt");
 	int a, b;
-	int N = 4;
+	int N = 6;
 
 	thread* threads = new thread[N];
 	thread_data* data = new thread_data[N];
@@ -111,7 +112,9 @@ int main() {
 		while (getline(source_file, line)) {
 			istringstream temp(line);
 			temp >> a >> b;
+			unique_lock<mutex> lock(data[cnt].qmtx); // Захватываем мьютекс, чтобы записать пару в очередь
 			data[cnt].queue.push_back(make_pair(a, b));
+			lock.unlock(); // Освобождаем мьютекс
 			cnt = (cnt + 1) % N; // Циклическое распределение пар
 		}
 	}
