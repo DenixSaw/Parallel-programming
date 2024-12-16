@@ -34,29 +34,28 @@ int main() {
 	ifstream source_file("nums_for_gcd.txt");
 	double start_time = omp_get_wtime();
 #pragma opm parallel
-	vector<pair<int, int>> pairs;
+	{
+		vector<pair<int, int>> pairs;
 
 #pragma omp master
-	{
-		// Чтение пар чисел из файла
-		if (source_file.is_open()) {
-			while (getline(source_file, line)) {
-				istringstream temp(line);
-				int a, b;
-				temp >> a >> b;
+		{
+			// Чтение пар чисел из файла
+			if (source_file.is_open()) {
+				while (getline(source_file, line)) {
+					istringstream temp(line);
+					int a, b;
+					temp >> a >> b;
 #pragma omp critical
-				{
-					pairs.push_back(make_pair(a, b));
+					{
+						pairs.push_back(make_pair(a, b));
+					}
 				}
 			}
+			source_file.close();
 		}
-		source_file.close();
-	}
-	int num_pairs = pairs.size();
+		int num_pairs = pairs.size();
 
-	// Параллельное вычисление GCD и запись результатов в файл
-#pragma omp parallel
-	{
+		// Параллельное вычисление GCD и запись результатов в файл
 		vector<int> thread_results; // Результаты для каждого потока
 #pragma omp for
 		for (int i = 0; i < num_pairs; i++) {
