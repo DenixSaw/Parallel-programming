@@ -45,7 +45,7 @@ int main() {
 					istringstream temp(line);
 					int a, b;
 					temp >> a >> b;
-#pragma omp critical
+	#pragma omp critical
 					{
 						pairs.push_back(make_pair(a, b));
 					}
